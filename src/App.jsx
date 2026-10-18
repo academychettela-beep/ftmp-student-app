@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Circle, BarChart3, ArrowLeft, RotateCcw, LogOut } from 'lucide-react';
 import AuthGate from './components/AuthGate.jsx';
+import { Blocks, sc } from './BlockRenderer.jsx';
 import {
   fetchModuleWithChapters,
   fetchProgress,
@@ -184,7 +185,7 @@ function AppShell() {
                     {String(ch.number).padStart(2, '0')}
                   </span>
                   <span style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-lg font-medium flex-1">
-                    {ch.title}
+                    {sc(ch.title)}
                   </span>
                   {ch.quizzes?.[0] && bestScore(ch.quizzes[0].id) !== null && (
                     <span style={{ color: '#6B6A62' }} className="text-xs">
@@ -206,11 +207,13 @@ function AppShell() {
               Chapter {activeChapter.number}
             </div>
             <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-3xl font-semibold mb-4">
-              {activeChapter.title}
+              {sc(activeChapter.title)}
             </h1>
-            <div className="flex flex-col gap-3" style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {activeChapter.content}
-            </div>
+            {Array.isArray(activeChapter.blocks) && activeChapter.blocks.length > 0 ? (
+              <Blocks blocks={activeChapter.blocks} title={activeChapter.title} />
+            ) : (
+              <div style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{activeChapter.content}</div>
+            )}
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => handleMarkRead(activeChapter.id)}
@@ -328,7 +331,7 @@ function AppShell() {
                 <div key={ch.id} style={{ background: 'white', borderColor: TOKENS.parchmentLine }} className="flex items-center gap-3 border rounded px-4 py-3">
                   {progress[ch.id] ? <CheckCircle2 size={18} style={{ color: TOKENS.goldInk }} /> : <Circle size={18} style={{ color: TOKENS.parchmentLine }} />}
                   <span style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="flex-1">
-                    {ch.title}
+                    {sc(ch.title)}
                   </span>
                   <span style={{ color: '#6B6A62' }} className="text-xs">
                     {ch.quizzes?.[0] && bestScore(ch.quizzes[0].id) !== null ? `Quiz best: ${bestScore(ch.quizzes[0].id)}%` : 'Quiz not attempted'}
