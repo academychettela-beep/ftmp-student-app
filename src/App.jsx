@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Circle, BarChart3, ArrowLeft, RotateCcw, LogOut } from 'lucide-react';
 import AuthGate from './components/AuthGate.jsx';
 import { Blocks, sc } from './BlockRenderer.jsx';
+import { supabase } from './supabaseClient.js';
 import {
   fetchModuleWithChapters,
   fetchProgress,
@@ -28,6 +29,7 @@ function AppShell() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [studentId, setStudentId] = useState(null);
+  const [studentCode, setStudentCode] = useState(null);
   const [moduleData, setModuleData] = useState(null); // { module, chapters }
   const [progress, setProgress] = useState({});
   const [quizAttempts, setQuizAttempts] = useState({});
@@ -43,6 +45,14 @@ function AppShell() {
         const session = await getSession();
         const uid = session?.user?.id;
         setStudentId(uid);
+
+        // Student ID (e.g. CFA-0001) is assigned by the database; show it if this student has one.
+        supabase
+          .from('students')
+          .select('student_code')
+          .eq('id', uid)
+          .maybeSingle()
+          .then(({ data }) => setStudentCode((data && data.student_code) || null));
 
         const [mod, prog, attempts] = await Promise.all([
           fetchModuleWithChapters(MODULE_NUMBER),
@@ -137,6 +147,11 @@ function AppShell() {
           <div style={{ fontFamily: 'Montserrat, sans-serif', color: '#B9C0D4' }} className="text-xs mt-1">
             Forex Trading Mastery Program — Module {moduleData.module.number}
           </div>
+          {studentCode && (
+            <div style={{ fontFamily: 'Montserrat, sans-serif', color: TOKENS.gold }} className="text-xs mt-1">
+              Student ID: {studentCode}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
