@@ -22,8 +22,34 @@ const TOKENS = {
   ink: '#2B2B28',
 };
 
-// Change this to load a different module once more are imported.
-const MODULE_NUMBER = 1;
+// Light list of every module with its chapters (no chapter text), used by the module picker and My Progress.
+async function fetchModulesLight() {
+  const { data, error } = await supabase
+    .from('modules')
+    .select('id, number, title, chapters(id, number, title, quizzes(id))')
+    .order('number');
+  if (error) throw error;
+  return data.map((m) => ({ ...m, chapters: [...m.chapters].sort((a, b) => a.number - b.number) }));
+}
+
+function moduleStats(m, progress, quizAttempts) {
+  const total = m.chapters.length;
+  const read = m.chapters.filter((c) => progress[c.id]).length;
+  const bests = m.chapters
+    .flatMap((c) => (c.quizzes || []).map((q) => quizAttempts[q.id]))
+    .filter((a) => a && a.length)
+    .map((a) => Math.max(...a));
+  const avg = bests.length ? Math.round(bests.reduce((x, y) => x + y, 0) / bests.length) : null;
+  return { total, read, avg };
+}
+
+function ProgressBar({ value, total }) {
+  return (
+    <div style={{ height: 6, background: TOKENS.parchmentLine, borderRadius: 3 }}>
+      <div style={{ width: `${total ? Math.round((value / total) * 100) : 0}%`, height: 6, background: TOKENS.gold, borderRadius: 3 }} />
+    </div>
+  );
+}
 
 function AppShell() {
   const [loading, setLoading] = useState(true);
@@ -34,7 +60,10 @@ function AppShell() {
   const [progress, setProgress] = useState({});
   const [quizAttempts, setQuizAttempts] = useState({});
 
-  const [view, setView] = useState('chapters');
+  const [view, setView] = useState('modules');
+  const [modules, setModules] = useState([]);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState('');
   const [activeChapterId, setActiveChapterId] = useState(null);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -54,15 +83,14 @@ function AppShell() {
           .maybeSingle()
           .then(({ data }) => setStudentCode((data && data.student_code) || null));
 
-        const [mod, prog, attempts] = await Promise.all([
-          fetchModuleWithChapters(MODULE_NUMBER),
+        const [mods, prog, attempts] = await Promise.all([
+          fetchModulesLight(),
           fetchProgress(uid),
           fetchQuizAttempts(uid),
         ]);
-        setModuleData(mod);
+        setModules(mods);
         setProgress(prog);
         setQuizAttempts(attempts);
-        setActiveChapterId(mod.chapters[0]?.id ?? null);
       } catch (err) {
         console.error(err);
         setLoadError(
@@ -85,15 +113,34 @@ function AppShell() {
     );
   }
 
-  const chapters = moduleData.chapters;
+  const chapters = moduleData ? moduleData.chapters : [];
   const activeChapter = chapters.find((c) => c.id === activeChapterId);
   const quiz = activeChapter?.quizzes?.[0]; // one quiz per chapter, as designed
-  const completedCount = Object.values(progress).filter(Boolean).length;
+  const completedCount = chapters.filter((c) => progress[c.id]).length;
+  const allStats = modules.map((m) => moduleStats(m, progress, quizAttempts));
+  const allRead = allStats.reduce((a, st) => a + st.read, 0);
+  const allTotal = allStats.reduce((a, st) => a + st.total, 0);
 
   function bestScore(quizId) {
     const attempts = quizAttempts[quizId];
     if (!attempts || attempts.length === 0) return null;
     return Math.max(...attempts);
+  }
+
+  async function openModule(number) {
+    setOpening(true);
+    setOpenError('');
+    try {
+      const mod = await fetchModuleWithChapters(number);
+      setModuleData(mod);
+      setActiveChapterId(mod.chapters[0]?.id ?? null);
+      setView('chapters');
+    } catch (err) {
+      console.error(err);
+      setOpenError('Could not open this module. Please check your connection and try again.');
+    } finally {
+      setOpening(false);
+    }
   }
 
   function openChapter(id) {
@@ -145,7 +192,7 @@ function AppShell() {
             Chettela Forex Academy
           </div>
           <div style={{ fontFamily: 'Montserrat, sans-serif', color: '#B9C0D4' }} className="text-xs mt-1">
-            Forex Trading Mastery Program — Module {moduleData.module.number}
+            Forex Trading Mastery Program{moduleData && ['chapters', 'reader', 'quiz'].includes(view) ? ` — Module ${moduleData.module.number}` : ''}
           </div>
           {studentCode && (
             <div style={{ fontFamily: 'Montserrat, sans-serif', color: TOKENS.gold }} className="text-xs mt-1">
@@ -155,11 +202,11 @@ function AppShell() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setView('chapters')}
+            onClick={() => setView('modules')}
             style={{ fontFamily: 'Montserrat, sans-serif', color: view !== 'progress' ? TOKENS.navy : '#D8DCE8', background: view !== 'progress' ? TOKENS.gold : 'transparent' }}
             className="text-sm px-3 py-1.5 rounded"
           >
-            Chapters
+            Modules
           </button>
           <button
             onClick={() => setView('progress')}
@@ -175,10 +222,60 @@ function AppShell() {
       </div>
 
       <div className="p-6">
-        {view === 'chapters' && (
+        {view === 'modules' && (
+          <div className="max-w-3xl">
+            <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy, fontSize: 40 }} className="font-semibold mb-1">
+              Your modules
+            </h1>
+            <p style={{ color: '#6B6A62' }} className="text-sm mb-3">
+              {allRead} of {allTotal} chapters read across the modules available so far
+            </p>
+            <ProgressBar value={allRead} total={allTotal} />
+            {openError && <p className="text-sm mt-3" style={{ color: '#A65D57' }}>{openError}</p>}
+            {modules.length === 0 && (
+              <p className="text-sm mt-4" style={{ color: '#6B6A62' }}>No modules have been added yet.</p>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginTop: 20 }}>
+              {modules.map((m, i) => {
+                const st = allStats[i];
+                const status = st.read === 0 ? 'Not started' : st.read === st.total ? 'Completed' : 'In progress';
+                const cta = st.read === 0 ? 'Start module' : st.read === st.total ? 'Review module' : 'Continue';
+                return (
+                  <div key={m.id} style={{ background: 'white', border: `1px solid ${TOKENS.parchmentLine}`, borderTop: `3px solid ${TOKENS.gold}`, borderRadius: 4, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontFamily: 'Montserrat, sans-serif', color: TOKENS.goldInk, fontWeight: 600 }} className="text-xs">Module {m.number}</span>
+                      <span style={{ fontFamily: 'Montserrat, sans-serif', color: st.read ? TOKENS.navy : '#6B6A62', background: st.read ? '#FBF6E8' : '#F1EEE6', border: `1px solid ${TOKENS.parchmentLine}`, padding: '2px 8px', borderRadius: 999, fontSize: 11 }}>{status}</span>
+                    </div>
+                    <div style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy, fontSize: 27, fontWeight: 700, lineHeight: 1.15 }}>{sc(m.title)}</div>
+                    <ProgressBar value={st.read} total={st.total} />
+                    <div className="text-sm" style={{ color: '#6B6A62' }}>
+                      {st.read} of {st.total} chapters read{st.avg !== null ? ` · quiz average ${st.avg}%` : ''}
+                    </div>
+                    <button
+                      onClick={() => openModule(m.number)}
+                      disabled={opening}
+                      style={{ alignSelf: 'flex-start', fontFamily: 'Montserrat, sans-serif', fontWeight: 600, background: st.read ? TOKENS.gold : TOKENS.navy, color: st.read ? TOKENS.navy : 'white', borderRadius: 4, padding: '8px 16px', opacity: opening ? 0.6 : 1 }}
+                      className="text-sm"
+                    >
+                      {opening ? 'Opening…' : cta}
+                    </button>
+                  </div>
+                );
+              })}
+              <div style={{ border: `1px dashed ${TOKENS.gold}`, borderRadius: 4, padding: '16px 18px', color: TOKENS.goldInk, fontFamily: '"Cormorant Garamond", serif', fontSize: 20 }} className="flex items-center">
+                More modules will appear here as they are added.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {view === 'chapters' && moduleData && (
           <div>
+            <button onClick={() => setView('modules')} className="flex items-center gap-1 text-sm mb-4" style={{ color: TOKENS.goldInk }}>
+              <ArrowLeft size={16} /> All modules
+            </button>
             <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-2xl font-semibold mb-1">
-              {moduleData.module.title}
+              {sc(moduleData.module.title)}
             </h1>
             <p style={{ color: '#6B6A62' }} className="text-sm mb-5">
               {completedCount} of {chapters.length} chapters complete
@@ -341,19 +438,29 @@ function AppShell() {
             <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-2xl font-semibold mb-5 flex items-center gap-2">
               <BarChart3 size={22} style={{ color: TOKENS.gold }} /> My Progress
             </h1>
-            <div className="flex flex-col gap-2">
-              {chapters.map((ch) => (
-                <div key={ch.id} style={{ background: 'white', borderColor: TOKENS.parchmentLine }} className="flex items-center gap-3 border rounded px-4 py-3">
-                  {progress[ch.id] ? <CheckCircle2 size={18} style={{ color: TOKENS.goldInk }} /> : <Circle size={18} style={{ color: TOKENS.parchmentLine }} />}
-                  <span style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="flex-1">
-                    {sc(ch.title)}
-                  </span>
-                  <span style={{ color: '#6B6A62' }} className="text-xs">
-                    {ch.quizzes?.[0] && bestScore(ch.quizzes[0].id) !== null ? `Quiz best: ${bestScore(ch.quizzes[0].id)}%` : 'Quiz not attempted'}
-                  </span>
+            {modules.map((m, i) => (
+              <div key={m.id} className="mb-6">
+                <div style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-xl font-semibold">
+                  Module {m.number}: {sc(m.title)}
                 </div>
-              ))}
-            </div>
+                <p className="text-xs mb-2" style={{ color: '#6B6A62' }}>
+                  {allStats[i].read} of {allStats[i].total} chapters read{allStats[i].avg !== null ? ` · quiz average ${allStats[i].avg}%` : ''}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {m.chapters.map((ch) => (
+                    <div key={ch.id} style={{ background: 'white', borderColor: TOKENS.parchmentLine }} className="flex items-center gap-3 border rounded px-4 py-3">
+                      {progress[ch.id] ? <CheckCircle2 size={18} style={{ color: TOKENS.goldInk }} /> : <Circle size={18} style={{ color: TOKENS.parchmentLine }} />}
+                      <span style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="flex-1">
+                        {sc(ch.title)}
+                      </span>
+                      <span style={{ color: '#6B6A62' }} className="text-xs">
+                        {ch.quizzes?.[0] && bestScore(ch.quizzes[0].id) !== null ? `Quiz best: ${bestScore(ch.quizzes[0].id)}%` : 'Quiz not attempted'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
