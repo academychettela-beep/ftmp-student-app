@@ -89,21 +89,27 @@ function AppShell() {
           .maybeSingle()
           .then(({ data }) => setStudentCode((data && data.student_code) || null));
 
-        const [mods, prog, attempts, written] = await Promise.all([
-          fetchModulesLight(),
-          fetchProgress(uid),
-          fetchQuizAttempts(uid),
-          fetchWrittenAnswers(uid),
-        ]);
+        // Course availability must not depend on optional written-answer storage.
+        // A missing table or RLS restriction on written_answers must not hide modules.
+        const mods = await fetchModulesLight();
         setModules(mods);
-        setProgress(prog);
-        setQuizAttempts(attempts);
-        setWrittenAnswers(written);
+
+        if (uid) {
+          const [progResult, attemptsResult, writtenResult] = await Promise.allSettled([
+            fetchProgress(uid),
+            fetchQuizAttempts(uid),
+            fetchWrittenAnswers(uid),
+          ]);
+          if (progResult.status === 'fulfilled') setProgress(progResult.value);
+          else console.error('Progress failed to load:', progResult.reason);
+          if (attemptsResult.status === 'fulfilled') setQuizAttempts(attemptsResult.value);
+          else console.error('Quiz history failed to load:', attemptsResult.reason);
+          if (writtenResult.status === 'fulfilled') setWrittenAnswers(writtenResult.value);
+          else console.error('Written answers failed to load:', writtenResult.reason);
+        }
       } catch (err) {
         console.error(err);
-        setLoadError(
-          'Could not load course content. Check that your .env has the right Supabase URL/key and that supabase/schema.sql has been run, with at least one module and chapter inserted.'
-        );
+        setLoadError(`Could not load module list: ${err?.message || String(err)}. Check the browser console for details.`);
       } finally {
         setLoading(false);
       }
@@ -196,7 +202,7 @@ function AppShell() {
       setWrittenAnswers((w) => ({ ...w, [questionId]: text }));
     } catch (err) {
       console.error(err);
-      setWrittenError('Could not save your answer. Check your connection and try again.');
+      setWrittenError(`Could not save your answer: ${err?.message || String(err)}`);
     } finally {
       setSavingId(null);
     }
