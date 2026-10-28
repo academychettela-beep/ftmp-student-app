@@ -9,6 +9,8 @@ import {
   fetchQuizAttempts,
   markChapterRead,
   submitQuizAttempt,
+  fetchWrittenAnswers,
+  submitWrittenAnswer,
   signOut,
   getSession,
 } from './lib/api.js';
@@ -67,6 +69,10 @@ function AppShell() {
   const [activeChapterId, setActiveChapterId] = useState(null);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [writtenAnswers, setWrittenAnswers] = useState({}); // { [question_id]: saved text }
+  const [draftText, setDraftText] = useState({});           // { [question_id]: text being typed, not yet saved }
+  const [savingId, setSavingId] = useState(null);
+  const [writtenError, setWrittenError] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -83,14 +89,16 @@ function AppShell() {
           .maybeSingle()
           .then(({ data }) => setStudentCode((data && data.student_code) || null));
 
-        const [mods, prog, attempts] = await Promise.all([
+        const [mods, prog, attempts, written] = await Promise.all([
           fetchModulesLight(),
           fetchProgress(uid),
           fetchQuizAttempts(uid),
+          fetchWrittenAnswers(uid),
         ]);
         setModules(mods);
         setProgress(prog);
         setQuizAttempts(attempts);
+        setWrittenAnswers(written);
       } catch (err) {
         console.error(err);
         setLoadError(
@@ -160,6 +168,8 @@ function AppShell() {
   function startQuiz() {
     setAnswers({});
     setSubmitted(false);
+    setDraftText({});
+    setWrittenError('');
     setView('quiz');
   }
 
@@ -168,9 +178,34 @@ function AppShell() {
     setAnswers((a) => ({ ...a, [qId]: optIndex }));
   }
 
+  function wordCount(text) {
+    return (text || '').trim().split(/\s+/).filter(Boolean).length;
+  }
+
+  async function handleSaveWritten(questionId) {
+    const text = (draftText[questionId] || '').trim();
+    const words = wordCount(text);
+    if (words < 1 || words > 100) {
+      setWrittenError('Write between 1 and 100 words before saving.');
+      return;
+    }
+    setWrittenError('');
+    setSavingId(questionId);
+    try {
+      await submitWrittenAnswer(studentId, questionId, text);
+      setWrittenAnswers((w) => ({ ...w, [questionId]: text }));
+    } catch (err) {
+      console.error(err);
+      setWrittenError('Could not save your answer. Check your connection and try again.');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   async function handleSubmitQuiz() {
-    const total = quiz.questions.length;
-    const correct = quiz.questions.filter((q) => answers[q.id] === q.correct_index).length;
+    const mcqQuestions = quiz.questions.filter((q) => q.type !== 'short_answer');
+    const total = mcqQuestions.length;
+    const correct = mcqQuestions.filter((q) => answers[q.id] === q.correct_index).length;
     const score = Math.round((correct / total) * 100);
     setSubmitted(true);
     setQuizAttempts((prev) => {
@@ -360,75 +395,128 @@ function AppShell() {
               {quiz.title}
             </h1>
             <div className="flex flex-col gap-5">
-              {quiz.questions.map((q, qi) => (
-                <div key={q.id}>
-                  <p className="font-medium mb-2">
-                    {qi + 1}. {q.prompt}
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {q.options.map((opt, oi) => {
-                      const isSelected = answers[q.id] === oi;
-                      const isCorrect = oi === q.correct_index;
-                      let border = TOKENS.parchmentLine;
-                      let bg = 'white';
-                      if (submitted) {
-                        if (isCorrect) {
-                          border = '#5C7A5C';
-                          bg = '#EEF3EA';
-                        } else if (isSelected && !isCorrect) {
-                          border = '#A65D57';
-                          bg = '#F7EBEA';
+              {quiz.questions.map((q, qi) => {
+                if (q.type === 'short_answer') {
+                  const saved = writtenAnswers[q.id];
+                  const draft = draftText[q.id] || '';
+                  const words = wordCount(draft);
+                  return (
+                    <div key={q.id}>
+                      <p className="font-medium mb-2">
+                        {qi + 1}. {q.prompt}
+                      </p>
+                      {saved !== undefined ? (
+                        <div style={{ background: '#FBF6E8', borderColor: TOKENS.parchmentLine }} className="border rounded px-3 py-2 text-sm">
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{saved}</div>
+                          <div style={{ fontFamily: 'Montserrat, sans-serif', color: TOKENS.goldInk }} className="text-xs mt-2">
+                            Saved — pending mentor review
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <textarea
+                            value={draft}
+                            onChange={(e) => setDraftText((d) => ({ ...d, [q.id]: e.target.value }))}
+                            rows={4}
+                            placeholder="Write your answer (up to 100 words)…"
+                            style={{ borderColor: TOKENS.parchmentLine }}
+                            className="w-full border rounded px-3 py-2 text-sm"
+                          />
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span style={{ color: words > 100 ? '#A65D57' : '#6B6A62' }} className="text-xs">
+                              {words}/100 words
+                            </span>
+                            <button
+                              onClick={() => handleSaveWritten(q.id)}
+                              disabled={savingId === q.id}
+                              style={{ background: TOKENS.gold, color: TOKENS.navy, fontFamily: 'Montserrat, sans-serif', opacity: savingId === q.id ? 0.6 : 1 }}
+                              className="text-sm px-3 py-1.5 rounded font-semibold"
+                            >
+                              {savingId === q.id ? 'Saving…' : 'Save answer'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={q.id}>
+                    <p className="font-medium mb-2">
+                      {qi + 1}. {q.prompt}
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {q.options.map((opt, oi) => {
+                        const isSelected = answers[q.id] === oi;
+                        const isCorrect = oi === q.correct_index;
+                        let border = TOKENS.parchmentLine;
+                        let bg = 'white';
+                        if (submitted) {
+                          if (isCorrect) {
+                            border = '#5C7A5C';
+                            bg = '#EEF3EA';
+                          } else if (isSelected && !isCorrect) {
+                            border = '#A65D57';
+                            bg = '#F7EBEA';
+                          }
+                        } else if (isSelected) {
+                          border = TOKENS.gold;
+                          bg = '#FBF6E8';
                         }
-                      } else if (isSelected) {
-                        border = TOKENS.gold;
-                        bg = '#FBF6E8';
-                      }
-                      return (
-                        <button
-                          key={oi}
-                          onClick={() => selectAnswer(q.id, oi)}
-                          style={{ borderColor: border, background: bg, textAlign: 'left' }}
-                          className="border rounded px-3 py-2 text-sm"
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={oi}
+                            onClick={() => selectAnswer(q.id, oi)}
+                            style={{ borderColor: border, background: bg, textAlign: 'left' }}
+                            className="border rounded px-3 py-2 text-sm"
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {!submitted ? (
-              <button
-                onClick={handleSubmitQuiz}
-                disabled={Object.keys(answers).length < quiz.questions.length}
-                style={{
-                  background: TOKENS.navy,
-                  color: 'white',
-                  fontFamily: 'Montserrat, sans-serif',
-                  opacity: Object.keys(answers).length < quiz.questions.length ? 0.4 : 1,
-                }}
-                className="text-sm px-4 py-2 rounded mt-6"
-              >
-                Submit answers
-              </button>
-            ) : (
-              <div className="mt-6 flex items-center gap-4">
-                <div style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-2xl font-semibold">
-                  {Math.round((quiz.questions.filter((q) => answers[q.id] === q.correct_index).length / quiz.questions.length) * 100)}%
-                </div>
+            {writtenError && <p className="text-sm mt-3" style={{ color: '#A65D57' }}>{writtenError}</p>}
+
+            {quiz.questions.some((q) => q.type !== 'short_answer') && (
+              !submitted ? (
                 <button
-                  onClick={startQuiz}
-                  className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border"
-                  style={{ borderColor: TOKENS.parchmentLine, color: TOKENS.goldInk }}
+                  onClick={handleSubmitQuiz}
+                  disabled={quiz.questions.filter((q) => q.type !== 'short_answer').some((q) => answers[q.id] === undefined)}
+                  style={{
+                    background: TOKENS.navy,
+                    color: 'white',
+                    fontFamily: 'Montserrat, sans-serif',
+                    opacity: quiz.questions.filter((q) => q.type !== 'short_answer').some((q) => answers[q.id] === undefined) ? 0.4 : 1,
+                  }}
+                  className="text-sm px-4 py-2 rounded mt-6"
                 >
-                  <RotateCcw size={14} /> Retake
+                  Submit answers
                 </button>
-                <span style={{ color: '#6B6A62' }} className="text-xs">
-                  Best score is kept automatically
-                </span>
-              </div>
+              ) : (
+                <div className="mt-6 flex items-center gap-4">
+                  <div style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy }} className="text-2xl font-semibold">
+                    {(() => {
+                      const mcq = quiz.questions.filter((q) => q.type !== 'short_answer');
+                      return Math.round((mcq.filter((q) => answers[q.id] === q.correct_index).length / mcq.length) * 100);
+                    })()}%
+                  </div>
+                  <button
+                    onClick={startQuiz}
+                    className="flex items-center gap-1 text-sm px-3 py-1.5 rounded border"
+                    style={{ borderColor: TOKENS.parchmentLine, color: TOKENS.goldInk }}
+                  >
+                    <RotateCcw size={14} /> Retake
+                  </button>
+                  <span style={{ color: '#6B6A62' }} className="text-xs">
+                    Best score is kept automatically
+                  </span>
+                </div>
+              )
             )}
           </div>
         )}
