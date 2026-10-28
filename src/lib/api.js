@@ -90,13 +90,38 @@ export async function submitQuizAttempt(studentId, quizId, score) {
 // --- Short-answer (written) questions ------------------------------------
 
 export async function fetchWrittenAnswers(studentId) {
-  const { data, error } = await supabase.from('written_answers').select('question_id, answer_text').eq('student_user_id', studentId);
+  const { data, error } = await supabase.from('written_answers').select('question_id, answer_text, review_status, mentor_feedback, reviewed_at').eq('student_user_id', studentId);
   if (error) throw error;
   // { [question_id]: saved answer text }
-  return Object.fromEntries(data.map((row) => [row.question_id, row.answer_text]));
+  return Object.fromEntries(data.map((row) => [row.question_id, row]));
 }
 
 export async function submitWrittenAnswer(studentId, questionId, text) {
   const { error } = await supabase.from('written_answers').insert({ student_user_id: studentId, question_id: questionId, answer_text: text });
+  if (error) throw error;
+}
+
+// Mentor privileges are established by trusted Auth app_metadata, never by the browser.
+export async function hasMentorRole() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  return data.user?.app_metadata?.ftmp_role === 'mentor';
+}
+
+export async function fetchMentorWrittenAnswers() {
+  const { data, error } = await supabase.from('written_answers')
+    .select('id, student_user_id, question_id, answer_text, submitted_at, review_status, mentor_feedback, reviewed_at, questions(prompt, quizzes(title, chapters(number,title, modules(number,title))))')
+    .order('submitted_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function reviewWrittenAnswer(answerId, status, feedback) {
+  if (!['reviewed', 'needs_improvement'].includes(status)) throw new Error('Invalid review status');
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError || !auth.user) throw authError || new Error('Not signed in');
+  const { error } = await supabase.from('written_answers')
+    .update({ review_status: status, mentor_feedback: feedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: auth.user.id })
+    .eq('id', answerId);
   if (error) throw error;
 }
