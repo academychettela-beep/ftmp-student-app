@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Circle, BarChart3, ArrowLeft, RotateCcw, LogOut } from 'lucide-react';
 import AuthGate from './components/AuthGate.jsx';
 import MentorReview from './components/MentorReview.jsx';
+import Certification from './components/Certification.jsx';
 import { Blocks, sc } from './BlockRenderer.jsx';
 import { supabase } from './supabaseClient.js';
 import {
@@ -265,6 +266,7 @@ function AppShell() {
           >
             My Progress
           </button>
+          <button onClick={() => setView('certification')} className="text-sm px-3 py-1.5 rounded border" style={{color:TOKENS.gold,borderColor:TOKENS.gold}}>Certification</button>
           {isMentor && <button onClick={() => setView('mentor')} className="text-sm px-3 py-1.5 rounded" style={{ color: TOKENS.navy, background: TOKENS.gold }}>Mentor review</button>}
           <button onClick={signOut} title="Sign out" className="text-sm p-1.5 rounded" style={{ color: '#D8DCE8' }}>
             <LogOut size={16} />
@@ -274,6 +276,7 @@ function AppShell() {
 
       <div className="p-6">
         {view === 'mentor' && isMentor && <MentorReview onBack={() => setView('modules')} />}
+        {view === 'certification' && <Certification studentId={studentId} onBack={() => setView('modules')} />}
         {view === 'modules' && (
           <div className="max-w-3xl">
             <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy, fontSize: 40 }} className="font-semibold mb-1">
