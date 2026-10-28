@@ -133,3 +133,44 @@ export async function reviewWrittenAnswer(answerId, status, feedback) {
   }
   return data[0];
 }
+
+// Certification progress is verified server-side on every check.
+export async function fetchCertificationEligibility() {
+  const { data, error } = await supabase.rpc('ftmp_certification_eligibility');
+  if (error) throw error;
+  return data;
+}
+export async function fetchCertificationExam() {
+  const { data, error } = await supabase.from('certification_exams').select('id,code,title,is_published').eq('code','FTMP-V1-CERT').maybeSingle();
+  if (error) throw error;
+  return data;
+}
+export async function fetchCertificationQuestions(examId) {
+  const { data, error } = await supabase.from('certification_questions').select('id,question_number,type,prompt,options,max_marks').eq('exam_id',examId).order('question_number');
+  if (error) throw error;
+  return data || [];
+}
+export async function startCertification(examId) {
+  const { data, error } = await supabase.rpc('certification_start',{p_exam_id:examId});
+  if (error) throw error;
+  return data;
+}
+export async function saveCertificationAnswer(attemptId, question, value) {
+  const args={p_attempt_id:attemptId,p_question_id:question.id,p_selected_index:question.type==='mcq'?value:null,p_written_answer:question.type==='short_answer'?value:null};
+  const { error }=await supabase.rpc('certification_save_response',args);
+  if(error) throw error;
+}
+export async function submitCertification(attemptId) {
+  const {error}=await supabase.rpc('certification_submit',{p_attempt_id:attemptId});
+  if(error) throw error;
+}
+export async function fetchCertificationAttempt(examId,userId) {
+  const {data,error}=await supabase.from('certification_attempts').select('id,status').eq('exam_id',examId).eq('student_user_id',userId).maybeSingle();
+  if(error) throw error;
+  return data;
+}
+export async function fetchCertificationResponses(attemptId) {
+  const {data,error}=await supabase.from('certification_responses').select('question_id,selected_index,written_answer').eq('attempt_id',attemptId);
+  if(error) throw error;
+  return data || [];
+}
