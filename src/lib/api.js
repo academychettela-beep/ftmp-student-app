@@ -120,8 +120,16 @@ export async function reviewWrittenAnswer(answerId, status, feedback) {
   if (!['reviewed', 'needs_improvement'].includes(status)) throw new Error('Invalid review status');
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError || !auth.user) throw authError || new Error('Not signed in');
-  const { error } = await supabase.from('written_answers')
-    .update({ review_status: status, mentor_feedback: feedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: auth.user.id })
-    .eq('id', answerId);
+  const { data, error } = await supabase.from('written_answers')
+    .update({ review_status: status, mentor_feedback: (feedback || '').trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: auth.user.id })
+    .eq('id', answerId)
+    .select('id, review_status, mentor_feedback, reviewed_at');
   if (error) throw error;
+  if (!data || data.length !== 1) {
+    throw new Error('Review was not saved: Supabase updated no answer row. Verify mentor access and written_answers UPDATE policy.');
+  }
+  if (data[0].review_status !== status) {
+    throw new Error('Review status did not persist as expected.');
+  }
+  return data[0];
 }
