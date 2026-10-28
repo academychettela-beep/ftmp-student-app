@@ -169,12 +169,23 @@ function AppShell() {
     }
   }
 
-  function startQuiz() {
+  async function startQuiz() {
     setAnswers({});
     setSubmitted(false);
     setDraftText({});
     setWrittenError('');
     setView('quiz');
+    // Re-read the server when the student opens the quiz, including
+    // review_status and mentor_feedback updated since the last sign-in.
+    if (studentId) {
+      try {
+        const latest = await fetchWrittenAnswers(studentId);
+        setWrittenAnswers(latest);
+      } catch (err) {
+        console.error('Unable to refresh review statuses:', err);
+        setWrittenError(`Could not refresh mentor review status: ${err.message || String(err)}`);
+      }
+    }
   }
 
   function selectAnswer(qId, optIndex) {
