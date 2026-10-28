@@ -174,3 +174,30 @@ export async function fetchCertificationResponses(attemptId) {
   if(error) throw error;
   return data || [];
 }
+
+
+// --- Certification mentor operations (read access is restricted by Supabase RLS) ---
+export async function fetchCertificationMentorAttempts(){
+  const {data,error}=await supabase.from('certification_attempts')
+    .select('id,exam_id,student_user_id,status,created_at,submitted_at,graded_at,practical_status,practical_feedback,certificate_status,certificate_issued_at')
+    .order('created_at',{ascending:false});
+  if(error)throw error; return data||[];
+}
+export async function fetchCertificationMentorResponses(attemptId){
+  const {data,error}=await supabase.from('certification_responses')
+    .select('attempt_id,question_id,selected_index,written_answer,awarded_marks,mentor_feedback,reviewed_at,certification_questions(question_number,type,prompt,max_marks)')
+    .eq('attempt_id',attemptId);
+  if(error)throw error;return (data||[]).sort((a,b)=>(a.certification_questions?.question_number||0)-(b.certification_questions?.question_number||0));
+}
+export async function gradeCertificationWritten(attemptId,questionId,marks,feedback){
+  const {error}=await supabase.rpc('certification_grade_written',{p_attempt_id:attemptId,p_question_id:questionId,p_marks:marks,p_feedback:feedback||null});
+  if(error)throw error;
+}
+export async function reviewCertificationPractical(attemptId,status,feedback){
+  const {error}=await supabase.rpc('certification_review_practical',{p_attempt_id:attemptId,p_status:status,p_feedback:feedback||null});
+  if(error)throw error;
+}
+export async function issueCertification(attemptId){
+  const {error}=await supabase.rpc('certification_issue',{p_attempt_id:attemptId});
+  if(error)throw error;
+}
