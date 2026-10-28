@@ -86,3 +86,17 @@ export async function submitQuizAttempt(studentId, quizId, score) {
   const { error } = await supabase.from('quiz_attempts').insert({ student_id: studentId, quiz_id: quizId, score });
   if (error) throw error;
 }
+
+// --- Short-answer (written) questions ------------------------------------
+
+export async function fetchWrittenAnswers(studentId) {
+  const { data, error } = await supabase.from('written_answers').select('question_id, answer_text').eq('student_id', studentId);
+  if (error) throw error;
+  // { [question_id]: saved answer text }
+  return Object.fromEntries(data.map((row) => [row.question_id, row.answer_text]));
+}
+
+export async function submitWrittenAnswer(studentId, questionId, text) {
+  const { error } = await supabase.from('written_answers').insert({ student_id: studentId, question_id: questionId, answer_text: text });
+  if (error) throw error;
+}
