@@ -21,9 +21,9 @@ export default function MentorReview({ onBack }) {
     if (busy) return;
     setBusy(row.id); setError(''); setNotice('');
     try {
-      await reviewWrittenAnswer(row.id, status, drafts[row.id] ?? row.mentor_feedback ?? '');
+      const saved = await reviewWrittenAnswer(row.id, status, drafts[row.id] ?? row.mentor_feedback ?? '');
       await reload();
-      setNotice('Review saved. The student will see the status after refreshing their quiz.');
+      setNotice(`Review saved as ${saved.review_status}. The student should sign in with their own account and reload the quiz.`);
     } catch (e) { setError(e.message || String(e)); }
     finally { setBusy(null); }
   }
