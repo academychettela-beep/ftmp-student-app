@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Circle, BarChart3, ArrowLeft, RotateCcw, LogOut } from 'lucide-react';
 import AuthGate from './components/AuthGate.jsx';
+import MentorReview from './components/MentorReview.jsx';
 import { Blocks, sc } from './BlockRenderer.jsx';
 import { supabase } from './supabaseClient.js';
 import {
@@ -13,6 +14,7 @@ import {
   submitWrittenAnswer,
   signOut,
   getSession,
+  hasMentorRole,
 } from './lib/api.js';
 
 const TOKENS = {
@@ -73,6 +75,7 @@ function AppShell() {
   const [draftText, setDraftText] = useState({});           // { [question_id]: text being typed, not yet saved }
   const [savingId, setSavingId] = useState(null);
   const [writtenError, setWrittenError] = useState('');
+  const [isMentor, setIsMentor] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -80,6 +83,7 @@ function AppShell() {
         const session = await getSession();
         const uid = session?.user?.id;
         setStudentId(uid);
+        try { setIsMentor(await hasMentorRole()); } catch (e) { console.warn("Mentor role lookup failed:", e); }
 
         // Student ID (e.g. CFA-0001) is assigned by the database; show it if this student has one.
         supabase
@@ -89,27 +93,21 @@ function AppShell() {
           .maybeSingle()
           .then(({ data }) => setStudentCode((data && data.student_code) || null));
 
-        // Course availability must not depend on optional written-answer storage.
-        // A missing table or RLS restriction on written_answers must not hide modules.
-        const mods = await fetchModulesLight();
+        const [mods, prog, attempts] = await Promise.all([
+          fetchModulesLight(),
+          fetchProgress(uid),
+          fetchQuizAttempts(uid),
+        ]);
         setModules(mods);
-
-        if (uid) {
-          const [progResult, attemptsResult, writtenResult] = await Promise.allSettled([
-            fetchProgress(uid),
-            fetchQuizAttempts(uid),
-            fetchWrittenAnswers(uid),
-          ]);
-          if (progResult.status === 'fulfilled') setProgress(progResult.value);
-          else console.error('Progress failed to load:', progResult.reason);
-          if (attemptsResult.status === 'fulfilled') setQuizAttempts(attemptsResult.value);
-          else console.error('Quiz history failed to load:', attemptsResult.reason);
-          if (writtenResult.status === 'fulfilled') setWrittenAnswers(writtenResult.value);
-          else console.error('Written answers failed to load:', writtenResult.reason);
-        }
+        setProgress(prog);
+        setQuizAttempts(attempts);
+        try { setWrittenAnswers(await fetchWrittenAnswers(uid)); }
+        catch (e) { console.warn('Written answers could not load:', e); }
       } catch (err) {
         console.error(err);
-        setLoadError(`Could not load module list: ${err?.message || String(err)}. Check the browser console for details.`);
+        setLoadError(
+          'Could not load course content. Check that your .env has the right Supabase URL/key and that supabase/schema.sql has been run, with at least one module and chapter inserted.'
+        );
       } finally {
         setLoading(false);
       }
@@ -199,10 +197,10 @@ function AppShell() {
     setSavingId(questionId);
     try {
       await submitWrittenAnswer(studentId, questionId, text);
-      setWrittenAnswers((w) => ({ ...w, [questionId]: text }));
+      setWrittenAnswers((w) => ({ ...w, [questionId]: { question_id: questionId, answer_text: text, review_status: 'pending', mentor_feedback: null } }));
     } catch (err) {
       console.error(err);
-      setWrittenError(`Could not save your answer: ${err?.message || String(err)}`);
+      setWrittenError('Could not save your answer. Check your connection and try again.');
     } finally {
       setSavingId(null);
     }
@@ -256,6 +254,7 @@ function AppShell() {
           >
             My Progress
           </button>
+          {isMentor && <button onClick={() => setView('mentor')} className="text-sm px-3 py-1.5 rounded" style={{ color: TOKENS.navy, background: TOKENS.gold }}>Mentor review</button>}
           <button onClick={signOut} title="Sign out" className="text-sm p-1.5 rounded" style={{ color: '#D8DCE8' }}>
             <LogOut size={16} />
           </button>
@@ -263,6 +262,7 @@ function AppShell() {
       </div>
 
       <div className="p-6">
+        {view === 'mentor' && isMentor && <MentorReview onBack={() => setView('modules')} />}
         {view === 'modules' && (
           <div className="max-w-3xl">
             <h1 style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.navy, fontSize: 40 }} className="font-semibold mb-1">
@@ -413,10 +413,11 @@ function AppShell() {
                       </p>
                       {saved !== undefined ? (
                         <div style={{ background: '#FBF6E8', borderColor: TOKENS.parchmentLine }} className="border rounded px-3 py-2 text-sm">
-                          <div style={{ whiteSpace: 'pre-wrap' }}>{saved}</div>
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{saved.answer_text}</div>
                           <div style={{ fontFamily: 'Montserrat, sans-serif', color: TOKENS.goldInk }} className="text-xs mt-2">
-                            Saved — pending mentor review
+                            {saved.review_status === 'reviewed' ? 'Reviewed by mentor' : saved.review_status === 'needs_improvement' ? 'Needs improvement — see mentor feedback' : 'Saved — pending mentor review'}
                           </div>
+                          {saved.mentor_feedback && <p className="text-sm mt-2" style={{ whiteSpace: 'pre-wrap' }}>Mentor feedback: {saved.mentor_feedback}</p>}
                         </div>
                       ) : (
                         <div>
