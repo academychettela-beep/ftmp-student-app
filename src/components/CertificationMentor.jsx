@@ -13,7 +13,7 @@ function printCertificate(certificate) {
     return;
   }
   const date = new Date(certificate.issued_at).toLocaleDateString();
-  const logo = `${window.location.origin}${import.meta.env.BASE_URL}cfa-logo.png`;
+  const logo = `${window.location.origin}${import.meta.env.BASE_URL}cfa-logo.svg`;
   popup.document.open();
   popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FTMP Certificate - ${escapeHtml(certificate.certificate_number)}</title>
 <style>
@@ -132,7 +132,7 @@ export default function CertificationMentor({onBack}) {
         <p><b>Certificate number:</b> {certificate.certificate_number}</p>
         <p><b>Holder:</b> {certificate.holder_name}</p>
         <p><b>Status:</b> {certificate.revoked_at?'Revoked':'Valid'}</p>
-        <div id="ftmp-print-certificate" className="relative border-4 border-double border-amber-600 text-center p-9 my-4 bg-white overflow-hidden" style={{color:'#10253b'}}>\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.png`} alt="" className="absolute inset-0 m-auto w-3/5 pointer-events-none" style={{opacity:0.20}} />\n          <div className="relative">\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.png`} alt="CFA logo" className="mx-auto w-40 h-auto mb-3" />
+        <div id="ftmp-print-certificate" className="relative border-4 border-double border-amber-600 text-center p-9 my-4 bg-white overflow-hidden" style={{color:'#10253b'}}>\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.svg`} alt="" className="absolute inset-0 m-auto w-3/5 pointer-events-none" style={{opacity:0.20}} />\n          <div className="relative">\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.svg`} alt="CFA logo" className="mx-auto w-40 h-auto mb-3" />
           <p className="text-2xl font-bold tracking-widest">THE CHETTELA FOREX ACADEMY</p>
           <p className="text-sm tracking-widest mt-1">KNOWLEDGE BEFORE PROFIT</p>
           <div className="my-10"><p className="text-4xl font-serif font-bold">Certificate of Foundation Completion</p><p className="mt-2 text-lg">Forex Trading Mastery Program · Volume 1</p></div>
