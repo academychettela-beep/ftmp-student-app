@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchCertificationMentorAttempts, fetchCertificationMentorResponses, gradeCertificationWritten, reviewCertificationPractical, issueCertificationNamed, fetchCertificateForAttempt, revokeCertificate } from '../lib/api.js';
+import { fetchCertificationMentorAttempts, fetchCertificationMentorResponses, gradeCertificationWritten, reviewCertificationPractical, issueCertificationNamed, fetchCertificateForAttempt, revokeCertificate, verifyCertificate } from '../lib/api.js';
 
 
 // Print in a standalone document so the app's hidden layout does not create blank pages.
@@ -50,6 +50,7 @@ export default function CertificationMentor({onBack}) {
   const [attempts,setAttempts]=useState([]),[selected,setSelected]=useState(''),[responses,setResponses]=useState([]);
   const [drafts,setDrafts]=useState({}),[practical,setPractical]=useState('pending'),[practicalFeedback,setPracticalFeedback]=useState('');
   const [holderName,setHolderName]=useState(''),[certificate,setCertificate]=useState(null),[revokeReason,setRevokeReason]=useState('');
+  const [verifyNumber,setVerifyNumber]=useState(''),[verification,setVerification]=useState(null),[verifyBusy,setVerifyBusy]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const current=attempts.find(a=>a.id===selected);
   async function reloadAttempts(){const a=await fetchCertificationMentorAttempts();setAttempts(a);return a;}
@@ -68,6 +69,22 @@ export default function CertificationMentor({onBack}) {
     <p className="my-3 text-sm">Theory: 20 MCQs scored automatically, 30 written answers graded here. Practical result is separate. Certificates require an explicit mentor decision.</p>
     {error&&<p role="alert" className="bg-red-50 text-red-800 p-3 mb-3 rounded">{error}</p>}
     {notice&&<p role="status" className="bg-green-50 text-green-800 p-3 mb-3 rounded">{notice}</p>}
+    <div className="border rounded bg-white p-4 mb-5">
+      <h2 className="text-xl font-semibold mb-2">Verify a certificate number</h2>
+      <p className="text-sm mb-3">Read-only verification. This does not modify or revoke a certificate.</p>
+      <form onSubmit={async e=>{e.preventDefault();setVerification(null);setVerifyBusy(true);try{const result=await verifyCertificate(verifyNumber.trim().toUpperCase());setVerification(result||{verification_status:'not_found'});}catch(err){setVerification({verification_status:'error',message:err.message||String(err)});}finally{setVerifyBusy(false);}}} className="flex gap-2 flex-wrap">
+        <input aria-label="Certificate number" className="border rounded p-2 flex-1 min-w-48" value={verifyNumber} maxLength={60} placeholder="CFA-FTMP-V1-0001001" onChange={e=>{setVerifyNumber(e.target.value);setVerification(null);}} />
+        <button type="submit" disabled={verifyBusy||!verifyNumber.trim()} className="bg-slate-800 text-white rounded px-4 py-2 disabled:opacity-40">{verifyBusy?'Checking…':'Verify'}</button>
+      </form>
+      {verification&&<div role="status" className="mt-3 p-3 rounded bg-slate-50">
+        <p><b>Status:</b> {verification.verification_status==='valid'?'VALID':verification.verification_status==='revoked'?'REVOKED':verification.verification_status==='not_found'?'NOT FOUND':'ERROR'}</p>
+        {verification.holder_name&&<p><b>Holder:</b> {verification.holder_name}</p>}
+        {verification.certificate_number&&<p><b>Number:</b> {verification.certificate_number}</p>}
+        {verification.exam_title&&<p><b>Program:</b> {verification.exam_title}</p>}
+        {verification.issued_at&&<p><b>Issued:</b> {new Date(verification.issued_at).toLocaleDateString()}</p>}
+        {verification.message&&<p className="text-red-800">{verification.message}</p>}
+      </div>}
+    </div>
     <label className="block font-medium mb-1" htmlFor="cert-student">Select a certification attempt</label>
     <div className="flex gap-2 mb-4"><select id="cert-student" className="border p-2 rounded flex-1" value={selected} onChange={e=>setSelected(e.target.value)}>
       <option value="">Choose student attempt</option>
