@@ -48,7 +48,7 @@ body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: 
 <div class="name">${escapeHtml(certificate.holder_name)}</div>
 <div class="statement">For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</div>
 <div class="details">Certificate No. ${escapeHtml(certificate.certificate_number)} · Issued ${escapeHtml(date)}</div>
-<div class="signature-area"><div class="signature-line"></div><div class="signature-name">Authorized Signatory</div><div class="signature-role">Founder &amp; Mentor · Chettela Forex Academy</div></div><div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
+<div class="signature-area"><div class="signature-line"></div><div class="signature-name">Raakesh Chettela</div><div class="signature-role">Founder &amp; Mentor · Chettela Forex Academy</div></div><div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
 </main></body></html>`);
   popup.addEventListener('load', () => { popup.focus(); popup.print(); }, { once: true });
   popup.document.close();
@@ -139,7 +139,7 @@ export default function CertificationMentor({onBack}) {
           <p>This certificate is presented to</p><p className="text-3xl font-serif font-bold my-5">{certificate.holder_name}</p>
           <p>For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</p>
           <p className="text-sm mt-8">Certificate No. {certificate.certificate_number} · Issued {new Date(certificate.issued_at).toLocaleDateString()}</p>
-          <div className="mt-8 ml-auto w-60 text-center"><div className="border-b border-slate-700 h-10"></div><p className="mt-2 font-semibold">Authorized Signatory</p><p className="text-xs">Founder & Mentor · Chettela Forex Academy</p></div>\n          <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>\n          </div>
+          <div className="mt-8 ml-auto w-60 text-center"><div className="border-b border-slate-700 h-10"></div><p className="mt-2 font-semibold">Raakesh Chettela</p><p className="text-xs">Founder & Mentor · Chettela Forex Academy</p></div>\n          <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>\n          </div>
         </div>
         {!certificate.revoked_at&&<button className="border rounded px-4 py-2 my-3" onClick={()=>printCertificate(certificate)}>Print / Save as PDF</button>}
         {!certificate.revoked_at&&<div className="mt-3"><label>Revocation reason (minimum 10 characters)<textarea className="border p-2 rounded block w-full" value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label>
