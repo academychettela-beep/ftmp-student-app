@@ -13,6 +13,7 @@ function printCertificate(certificate) {
     return;
   }
   const date = new Date(certificate.issued_at).toLocaleDateString();
+  const logo = `${window.location.origin}${import.meta.env.BASE_URL}cfa-logo.png`;
   popup.document.open();
   popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FTMP Certificate - ${escapeHtml(certificate.certificate_number)}</title>
 <style>
@@ -20,8 +21,15 @@ function printCertificate(certificate) {
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
 body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: #10253b; }
-.certificate { width: 297mm; height: 210mm; padding: 15mm; border: 9mm solid white; outline: 2mm double #a88743; outline-offset: -12mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
-.academy { font: bold 27px Arial, sans-serif; letter-spacing: 2px; }
+.certificate { width: 297mm; height: 210mm; padding: 15mm; border: 9mm solid white; outline: 2mm double #a88743; outline-offset: -12mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; position:relative; }
+.academy { font: bold 23px Arial, sans-serif; letter-spacing: 2px; position:relative; z-index:1; }
+.brandmark { width: 135px; height:auto; max-height:120px; object-fit:contain; position:relative; z-index:1; }
+.watermark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width: 540px; max-width:80%; opacity:.20; z-index:0; pointer-events:none; }
+.certificate > div:not(.watermark) {position:relative; z-index:1;}
+.signature-area { align-self:flex-end; width:240px; text-align:center; margin-top:20px; font:12px Arial,sans-serif; position:relative; z-index:1; }
+.signature-line { border-bottom:1px solid #293f58; height:27px; margin-bottom:6px; }
+.signature-name {font-weight:700; font-size:13px;}
+.signature-role {font-size:11px; margin-top:3px;}
 .motto { font: 12px Arial, sans-serif; letter-spacing: 3px; margin-top: 10px; }
 .title { font-size: 36px; margin: 36px 0 7px; }
 .subtitle { font: 17px Arial, sans-serif; }
@@ -33,14 +41,14 @@ body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: 
 @media screen { body { display: flex; justify-content: center; background: #e8e8e8; padding: 12px; } .certificate { background: white; box-shadow: 0 6px 20px #aaa; } }
 @media print { .certificate { break-inside: avoid; page-break-inside: avoid; } }
 </style></head><body><main class="certificate">
-<div class="academy">THE CHETTELA FOREX ACADEMY</div><div class="motto">KNOWLEDGE BEFORE PROFIT</div>
+<img class="watermark" src="${logo}" alt="" /><img class="brandmark" src="${logo}" alt="CFA logo" /><div class="academy">THE CHETTELA FOREX ACADEMY</div><div class="motto">KNOWLEDGE BEFORE PROFIT</div>
 <div class="title">Certificate of Foundation Completion</div>
 <div class="subtitle">Forex Trading Mastery Program · Volume 1</div>
 <div class="presented">This certificate is presented to</div>
 <div class="name">${escapeHtml(certificate.holder_name)}</div>
 <div class="statement">For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</div>
 <div class="details">Certificate No. ${escapeHtml(certificate.certificate_number)} · Issued ${escapeHtml(date)}</div>
-<div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
+<div class="signature-area"><div class="signature-line"></div><div class="signature-name">Authorized Signatory</div><div class="signature-role">Founder &amp; Mentor · Chettela Forex Academy</div></div><div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
 </main></body></html>`);
   popup.addEventListener('load', () => { popup.focus(); popup.print(); }, { once: true });
   popup.document.close();
@@ -124,14 +132,14 @@ export default function CertificationMentor({onBack}) {
         <p><b>Certificate number:</b> {certificate.certificate_number}</p>
         <p><b>Holder:</b> {certificate.holder_name}</p>
         <p><b>Status:</b> {certificate.revoked_at?'Revoked':'Valid'}</p>
-        <div id="ftmp-print-certificate" className="border-4 border-double border-amber-600 text-center p-9 my-4 bg-white" style={{color:'#10253b'}}>
+        <div id="ftmp-print-certificate" className="relative border-4 border-double border-amber-600 text-center p-9 my-4 bg-white overflow-hidden" style={{color:'#10253b'}}>\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.png`} alt="" className="absolute inset-0 m-auto w-3/5 pointer-events-none" style={{opacity:0.20}} />\n          <div className="relative">\n          <img src={`${import.meta.env.BASE_URL}cfa-logo.png`} alt="CFA logo" className="mx-auto w-40 h-auto mb-3" />
           <p className="text-2xl font-bold tracking-widest">THE CHETTELA FOREX ACADEMY</p>
           <p className="text-sm tracking-widest mt-1">KNOWLEDGE BEFORE PROFIT</p>
           <div className="my-10"><p className="text-4xl font-serif font-bold">Certificate of Foundation Completion</p><p className="mt-2 text-lg">Forex Trading Mastery Program · Volume 1</p></div>
           <p>This certificate is presented to</p><p className="text-3xl font-serif font-bold my-5">{certificate.holder_name}</p>
           <p>For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</p>
           <p className="text-sm mt-8">Certificate No. {certificate.certificate_number} · Issued {new Date(certificate.issued_at).toLocaleDateString()}</p>
-          <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>
+          <div className="mt-8 ml-auto w-60 text-center"><div className="border-b border-slate-700 h-10"></div><p className="mt-2 font-semibold">Authorized Signatory</p><p className="text-xs">Founder & Mentor · Chettela Forex Academy</p></div>\n          <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>\n          </div>
         </div>
         {!certificate.revoked_at&&<button className="border rounded px-4 py-2 my-3" onClick={()=>printCertificate(certificate)}>Print / Save as PDF</button>}
         {!certificate.revoked_at&&<div className="mt-3"><label>Revocation reason (minimum 10 characters)<textarea className="border p-2 rounded block w-full" value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label>
