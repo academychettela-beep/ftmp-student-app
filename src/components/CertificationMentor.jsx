@@ -1,21 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchCertificationMentorAttempts, fetchCertificationMentorResponses, gradeCertificationWritten, reviewCertificationPractical, issueCertification } from '../lib/api.js';
+import { fetchCertificationMentorAttempts, fetchCertificationMentorResponses, gradeCertificationWritten, reviewCertificationPractical, issueCertificationNamed, fetchCertificateForAttempt, revokeCertificate } from '../lib/api.js';
 
 export default function CertificationMentor({onBack}) {
   const [attempts,setAttempts]=useState([]),[selected,setSelected]=useState(''),[responses,setResponses]=useState([]);
   const [drafts,setDrafts]=useState({}),[practical,setPractical]=useState('pending'),[practicalFeedback,setPracticalFeedback]=useState('');
+  const [holderName,setHolderName]=useState(''),[certificate,setCertificate]=useState(null),[revokeReason,setRevokeReason]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const current=attempts.find(a=>a.id===selected);
   async function reloadAttempts(){const a=await fetchCertificationMentorAttempts();setAttempts(a);return a;}
   async function loadResponses(id){const r=await fetchCertificationMentorResponses(id);setResponses(r);setDrafts(Object.fromEntries(r.filter(x=>x.certification_questions?.type==='short_answer').map(x=>[x.question_id,{marks:x.awarded_marks===null?'':String(x.awarded_marks),feedback:x.mentor_feedback||''}])));}
   useEffect(()=>{(async()=>{try{await reloadAttempts();}catch(e){setError(e.message)}})()},[]);
-  useEffect(()=>{if(!selected){setResponses([]);return;}setError('');loadResponses(selected).catch(e=>setError(e.message));const a=attempts.find(x=>x.id===selected);setPractical(a?.practical_status||'pending');setPracticalFeedback(a?.practical_feedback||'');},[selected]);
+  useEffect(()=>{if(!selected){setResponses([]);return;}setError('');loadResponses(selected).catch(e=>setError(e.message));const a=attempts.find(x=>x.id===selected);setPractical(a?.practical_status||'pending');setPracticalFeedback(a?.practical_feedback||'');setCertificate(null);fetchCertificateForAttempt(selected).then(setCertificate).catch(e=>setError(e.message));},[selected]);
   const gradedCount=responses.filter(r=>r.awarded_marks!==null).length;
   const total=responses.reduce((n,r)=>n+(r.awarded_marks||0),0);
   const mcq=responses.filter(r=>r.certification_questions?.type==='mcq').reduce((n,r)=>n+(r.awarded_marks||0),0);
   const short=responses.filter(r=>r.certification_questions?.type==='short_answer').reduce((n,r)=>n+(r.awarded_marks||0),0);
-  async function run(fn,done){setBusy(true);setError('');setNotice('');try{await fn();const a=await reloadAttempts();if(selected)await loadResponses(selected);setNotice(done);}catch(e){setError(e.message||String(e))}finally{setBusy(false)}}
-  const canGrade=current&&['submitted','graded'].includes(current.status);
+  async function run(fn,done){setBusy(true);setError('');setNotice('');try{await fn();const a=await reloadAttempts();if(selected){await loadResponses(selected);setCertificate(await fetchCertificateForAttempt(selected));}setNotice(done);}catch(e){setError(e.message||String(e))}finally{setBusy(false)}}
+  const canGrade=current&&['submitted','graded'].includes(current.status)&&current.certificate_status!=='issued'&&!certificate;
   return <section className="max-w-4xl mx-auto text-slate-900">
     <button onClick={onBack} className="mb-4 underline text-sm">← Back to modules</button>
     <h1 className="text-3xl font-semibold">Certification — Mentor Review</h1>
@@ -49,12 +50,32 @@ export default function CertificationMentor({onBack}) {
         <p className="text-sm my-2">Check the student's trade plan, risk compliance, executed trades, journal and review evidence outside this form before recording a decision.</p>
         <label className="block mb-2">Practical result <select className="border rounded p-2 ml-2" value={practical} onChange={e=>setPractical(e.target.value)}><option value="pending">Pending</option><option value="passed">Passed</option><option value="not_passed">Not passed</option></select></label>
         <label className="block">Practical mentor feedback <textarea className="w-full border rounded p-2 mt-1" rows={3} value={practicalFeedback} onChange={e=>setPracticalFeedback(e.target.value)}/></label>
-        <button disabled={busy||!canGrade} className="border rounded px-4 py-2 mt-2 disabled:opacity-40" onClick={()=>run(()=>reviewCertificationPractical(selected,practical,practicalFeedback),'Practical review saved')}>Save practical assessment</button>
+        <button disabled={busy||!canGrade||!!certificate} className="border rounded px-4 py-2 mt-2 disabled:opacity-40" onClick={()=>run(()=>reviewCertificationPractical(selected,practical,practicalFeedback),'Practical review saved')}>Save practical assessment</button>
       </div>
       <div className="border rounded bg-white p-4 mb-6"><h2 className="text-xl font-semibold mb-2">Final certificate approval</h2>
-        <p className="text-sm mb-3">Issue only if all written answers are graded, theory meets the database pass threshold, and practical is Passed. Issuance records the mentor account and timestamp; this does not generate a printable certificate.</p>
-        <button className="bg-amber-500 text-slate-900 font-semibold rounded px-4 py-3 disabled:opacity-40" disabled={busy||current.status!=='graded'||current.practical_status!=='passed'||current.certificate_status==='issued'} onClick={()=>{if(window.confirm('Issue certification to this student? This records official approval.'))run(()=>issueCertification(selected),'Certificate approval recorded')}}>Approve certification</button>
+        <p className="text-sm mb-3">Issue only after all 50 responses are graded, theory reaches 70/100, and practical is passed. The student name and certificate number are recorded.</p>
+        <label className="block mb-3">Verified certificate holder name<input className="block w-full mt-1 border rounded p-2" maxLength={120} value={holderName} disabled={busy||!!certificate} onChange={e=>setHolderName(e.target.value)} /></label>
+        <button className="bg-amber-500 text-slate-900 font-semibold rounded px-4 py-3 disabled:opacity-40" disabled={busy||current.status!=='graded'||current.practical_status!=='passed'||current.certificate_status==='issued'||!!certificate||total<70||gradedCount!==50||holderName.trim().length<2} onClick={()=>{if(window.confirm('Issue an official certificate to this student?'))run(()=>issueCertificationNamed(selected,holderName.trim()),'Certificate issued')}}>Approve certification</button>
       </div>
+      {certificate&&<div className="border rounded bg-white p-5 mb-6">
+        <h2 className="text-xl font-semibold mb-2">Certificate record</h2>
+        <p><b>Certificate number:</b> {certificate.certificate_number}</p>
+        <p><b>Holder:</b> {certificate.holder_name}</p>
+        <p><b>Status:</b> {certificate.revoked_at?'Revoked':'Valid'}</p>
+        <style>{`@media print {body * {visibility:hidden!important} #ftmp-print-certificate,#ftmp-print-certificate *{visibility:visible!important} #ftmp-print-certificate{position:absolute;top:0;left:0;width:100%;min-height:85vh;padding:65px 35px;box-sizing:border-box;border:8px double #a88743;color:#10253b;background:white} @page{size:landscape;margin:10mm}}`}</style>
+        <div id="ftmp-print-certificate" className="border-4 border-double border-amber-600 text-center p-9 my-4 bg-white" style={{color:'#10253b'}}>
+          <p className="text-2xl font-bold tracking-widest">THE CHETTELA FOREX ACADEMY</p>
+          <p className="text-sm tracking-widest mt-1">KNOWLEDGE BEFORE PROFIT</p>
+          <div className="my-10"><p className="text-4xl font-serif font-bold">Certificate of Foundation Completion</p><p className="mt-2 text-lg">Forex Trading Mastery Program · Volume 1</p></div>
+          <p>This certificate is presented to</p><p className="text-3xl font-serif font-bold my-5">{certificate.holder_name}</p>
+          <p>For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</p>
+          <p className="text-sm mt-8">Certificate No. {certificate.certificate_number} · Issued {new Date(certificate.issued_at).toLocaleDateString()}</p>
+          <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>
+        </div>
+        {!certificate.revoked_at&&<button className="border rounded px-4 py-2 my-3" onClick={()=>window.print()}>Print / Save as PDF</button>}
+        {!certificate.revoked_at&&<div className="mt-3"><label>Revocation reason (minimum 10 characters)<textarea className="border p-2 rounded block w-full" value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label>
+        <button disabled={busy||revokeReason.trim().length<10} className="bg-red-800 text-white rounded px-3 py-2 mt-2 disabled:opacity-40" onClick={()=>{if(window.confirm('Revoke this certificate?'))run(()=>revokeCertificate(certificate.certificate_number,revokeReason),'Certificate revoked')}}>Revoke certificate</button></div>}
+      </div>}
     </>}
   </section>
 }
