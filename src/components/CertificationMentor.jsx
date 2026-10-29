@@ -1,6 +1,51 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchCertificationMentorAttempts, fetchCertificationMentorResponses, gradeCertificationWritten, reviewCertificationPractical, issueCertificationNamed, fetchCertificateForAttempt, revokeCertificate } from '../lib/api.js';
 
+
+// Print in a standalone document so the app's hidden layout does not create blank pages.
+function printCertificate(certificate) {
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+  const popup = window.open('', '_blank', 'width=1100,height=820');
+  if (!popup) {
+    window.alert('Please allow pop-ups for this site to print your certificate.');
+    return;
+  }
+  const date = new Date(certificate.issued_at).toLocaleDateString();
+  popup.document.open();
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FTMP Certificate - ${escapeHtml(certificate.certificate_number)}</title>
+<style>
+@page { size: A4 landscape; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: #10253b; }
+.certificate { width: 297mm; height: 210mm; padding: 15mm; border: 9mm solid white; outline: 2mm double #a88743; outline-offset: -12mm; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+.academy { font: bold 27px Arial, sans-serif; letter-spacing: 2px; }
+.motto { font: 12px Arial, sans-serif; letter-spacing: 3px; margin-top: 10px; }
+.title { font-size: 36px; margin: 36px 0 7px; }
+.subtitle { font: 17px Arial, sans-serif; }
+.presented { margin-top: 35px; font: 15px Arial, sans-serif; }
+.name { font-size: 37px; font-weight: bold; margin: 18px 0; }
+.statement { font: 16px/1.5 Arial, sans-serif; max-width: 810px; }
+.details { margin-top: 38px; font: 13px Arial, sans-serif; }
+.disclaimer { margin-top: 18px; font: 11px Arial, sans-serif; }
+@media screen { body { display: flex; justify-content: center; background: #e8e8e8; padding: 12px; } .certificate { background: white; box-shadow: 0 6px 20px #aaa; } }
+@media print { .certificate { break-inside: avoid; page-break-inside: avoid; } }
+</style></head><body><main class="certificate">
+<div class="academy">THE CHETTELA FOREX ACADEMY</div><div class="motto">KNOWLEDGE BEFORE PROFIT</div>
+<div class="title">Certificate of Foundation Completion</div>
+<div class="subtitle">Forex Trading Mastery Program · Volume 1</div>
+<div class="presented">This certificate is presented to</div>
+<div class="name">${escapeHtml(certificate.holder_name)}</div>
+<div class="statement">For completing the Volume 1 theory examination and passing the supervised demo-account practical evaluation.</div>
+<div class="details">Certificate No. ${escapeHtml(certificate.certificate_number)} · Issued ${escapeHtml(date)}</div>
+<div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
+</main></body></html>`);
+  popup.addEventListener('load', () => { popup.focus(); popup.print(); }, { once: true });
+  popup.document.close();
+}
+
 export default function CertificationMentor({onBack}) {
   const [attempts,setAttempts]=useState([]),[selected,setSelected]=useState(''),[responses,setResponses]=useState([]);
   const [drafts,setDrafts]=useState({}),[practical,setPractical]=useState('pending'),[practicalFeedback,setPracticalFeedback]=useState('');
@@ -62,7 +107,6 @@ export default function CertificationMentor({onBack}) {
         <p><b>Certificate number:</b> {certificate.certificate_number}</p>
         <p><b>Holder:</b> {certificate.holder_name}</p>
         <p><b>Status:</b> {certificate.revoked_at?'Revoked':'Valid'}</p>
-        <style>{`@media print {body * {visibility:hidden!important} #ftmp-print-certificate,#ftmp-print-certificate *{visibility:visible!important} #ftmp-print-certificate{position:absolute;top:0;left:0;width:100%;min-height:85vh;padding:65px 35px;box-sizing:border-box;border:8px double #a88743;color:#10253b;background:white} @page{size:landscape;margin:10mm}}`}</style>
         <div id="ftmp-print-certificate" className="border-4 border-double border-amber-600 text-center p-9 my-4 bg-white" style={{color:'#10253b'}}>
           <p className="text-2xl font-bold tracking-widest">THE CHETTELA FOREX ACADEMY</p>
           <p className="text-sm tracking-widest mt-1">KNOWLEDGE BEFORE PROFIT</p>
@@ -72,7 +116,7 @@ export default function CertificationMentor({onBack}) {
           <p className="text-sm mt-8">Certificate No. {certificate.certificate_number} · Issued {new Date(certificate.issued_at).toLocaleDateString()}</p>
           <p className="text-xs mt-5">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</p>
         </div>
-        {!certificate.revoked_at&&<button className="border rounded px-4 py-2 my-3" onClick={()=>window.print()}>Print / Save as PDF</button>}
+        {!certificate.revoked_at&&<button className="border rounded px-4 py-2 my-3" onClick={()=>printCertificate(certificate)}>Print / Save as PDF</button>}
         {!certificate.revoked_at&&<div className="mt-3"><label>Revocation reason (minimum 10 characters)<textarea className="border p-2 rounded block w-full" value={revokeReason} onChange={e=>setRevokeReason(e.target.value)}/></label>
         <button disabled={busy||revokeReason.trim().length<10} className="bg-red-800 text-white rounded px-3 py-2 mt-2 disabled:opacity-40" onClick={()=>{if(window.confirm('Revoke this certificate?'))run(()=>revokeCertificate(certificate.certificate_number,revokeReason),'Certificate revoked')}}>Revoke certificate</button></div>}
       </div>}
