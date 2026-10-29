@@ -42,9 +42,8 @@ body { font-family: Georgia, 'Times New Roman', serif; background: #fff; color: 
 <div class="details">Certificate No. ${escapeHtml(certificate.certificate_number)} · Issued ${escapeHtml(date)}</div>
 <div class="disclaimer">Foundational training and assessed practice, not a guarantee of profit or professional accreditation.</div>
 </main></body></html>`);
+  popup.addEventListener('load', () => { popup.focus(); popup.print(); }, { once: true });
   popup.document.close();
-  popup.focus();
-  popup.print();
 }
 
 export default function CertificationMentor({onBack}) {
