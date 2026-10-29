@@ -201,3 +201,27 @@ export async function issueCertification(attemptId){
   const {error}=await supabase.rpc('certification_issue',{p_attempt_id:attemptId});
   if(error)throw error;
 }
+
+
+// Final certificate registry operations. Database applies mentor authorization.
+export async function issueCertificationNamed(attemptId, holderName) {
+  const { data, error } = await supabase.rpc('certification_issue_named', { p_attempt_id: attemptId, p_holder_name: holderName });
+  if (error) throw error;
+  return data;
+}
+export async function fetchCertificateForAttempt(attemptId) {
+  const { data, error } = await supabase.from('ftmp_certificates')
+    .select('certificate_number,holder_name,exam_title,theory_score,issued_at,revoked_at')
+    .eq('attempt_id', attemptId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+export async function revokeCertificate(number, reason) {
+  const { error } = await supabase.rpc('ftmp_revoke_certificate', { p_certificate_number: number, p_reason: reason });
+  if (error) throw error;
+}
+export async function verifyCertificate(number) {
+  const { data, error } = await supabase.rpc('ftmp_verify_certificate', { p_certificate_number: number });
+  if (error) throw error;
+  return data?.[0] || null;
+}
