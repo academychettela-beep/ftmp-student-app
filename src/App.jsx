@@ -239,7 +239,9 @@ function AppShell() {
   return (
     <div style={{ fontFamily: 'Lato, sans-serif', background: TOKENS.parchment, color: TOKENS.ink, minHeight: '600px' }} className="w-full">
       <div style={{ background: TOKENS.navy }} className="px-6 py-4 flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3 min-w-0">
+          <img src={`${import.meta.env.BASE_URL}cfa-logo.svg`} alt="The Chettela Forex Academy logo" className="w-16 sm:w-20 h-auto shrink-0 object-contain" />
+          <div>
           <div style={{ fontFamily: '"Cormorant Garamond", serif', color: TOKENS.gold }} className="text-xl font-semibold leading-none">
             Chettela Forex Academy
           </div>
@@ -251,6 +253,7 @@ function AppShell() {
               Student ID: {studentCode}
             </div>
           )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
